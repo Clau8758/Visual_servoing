@@ -12,7 +12,9 @@ import cv2
 from cv2 import aruco
 import numpy as np
 import os
+import numpy.matlib
 
+ideal_feature=np.matlib.zeros((4*2,1))
 
 path = '/Users/Claus/python_scripts/'
 load = np.load(os.path.join(os.path.dirname(path), "mtx_dist.npz"))
@@ -44,7 +46,7 @@ while True:
     #frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 	# detect ArUco markers in the input frame and output corner pixel coordinates
     (corners, ids, rejected) = cv2.aruco.detectMarkers(frame,arucoDict, parameters=arucoParams)
-    
+    corners = np.array(corners)
     
     # Calculate the distance to marker center which is Z in the interaction matrix (the Z-coord in the tvec)
     markerSizeInCM = 5
@@ -52,7 +54,13 @@ while True:
     if tvec is not None:
         mag = np.linalg.norm(tvec)
     
+    #Draw the desired position of the 4 corner points
+    #cv2.circle(frame, (target_positions[0][0],target_positions[0][1]), 4, (255, 0, 0), -1)
+    #cv2.circle(frame, (target_positions[1][0],target_positions[1][1]), 4, (255, 0, 0), -1)
+    #cv2.circle(frame, (target_positions[2][0],target_positions[2][1]), 4, (255, 0, 0), -1)
+    #cv2.circle(frame, (target_positions[3][0],target_positions[3][1]), 4, (255, 0, 0), -1)    
 
+    
     
 	# verify *at least* one ArUco marker was detected
     if len(corners) > 0:
@@ -81,15 +89,10 @@ while True:
             cX = int((topLeft[0] + bottomRight[0]) / 2.0)
             cY = int((topLeft[1] + bottomRight[1]) / 2.0)
             cv2.circle(frame, (cX, cY), 4, (0, 0, 255), -1)  
-            #Draw the correct position of the 4 corner points
-            cv2.circle(frame, (target_positions[0][0],target_positions[0][1]), 4, (255, 0, 0), -1)
-            cv2.circle(frame, (target_positions[1][0],target_positions[1][1]), 4, (255, 0, 0), -1)
-            cv2.circle(frame, (target_positions[2][0],target_positions[2][1]), 4, (255, 0, 0), -1)
-            cv2.circle(frame, (target_positions[3][0],target_positions[3][1]), 4, (255, 0, 0), -1)
             
-            # draw the marker distance on the frame
-            cv2.putText(frame,'Dist:'+str(mag),(topLeft[0], topLeft[1] - 15), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0, 255, 0), 2)
             
+                   
+         
     else:
         print("[INFO] No marker detected...")
 	# show the output frame
@@ -99,9 +102,31 @@ while True:
     if key == ord("q"):
         break
     
+    if tvec is not None:    
+        #Generate L or interaction matrix:
+        L=np.matlib.zeros((2*4,6))  
+        # Gain on controller, essentially sets arm speed, although too high of a value will cause the
+        # function to diverge.
+        target_feature = corners.flatten()
+        target_feature = target_feature[:,None]
+        
+        target_positions = target_positions.flatten()
+        target_positions = target_positions[:,None]
+        
+        Z = mag
+        ideal_feature=np.matlib.zeros((4*2,1))
+        lam = 0.5
+        for i in range(0,4):
+            x=corners[i][0]
+            y=corners[i][1]
+            ideal_feature[i*2,0]=x
+            ideal_feature[i*2+1,0]=y
+            L[i*2:i*2+2,:]=np.matrix([[-1/Z,0,x/Z,x*y,-(1+x*x),y],[0,-1/Z,y/Z,1+y*y,-x*y,-x]])
+        error = target_feature - target_positions
+        vel=-lam*np.dot(np.linalg.pinv(L),error)
+        
+        print(vel)
     
-    
-
 # do a bit of cleanup
 cv2.destroyAllWindows()
 vs.stop()
