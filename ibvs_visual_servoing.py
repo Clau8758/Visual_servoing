@@ -111,16 +111,17 @@ while True:
         target_positions = target_positions.flatten()
         target_positions = target_positions[:,None]
         
-	#Same depth are used for all four points (Probably no ideal and might not work)
+	#Same depth are used for all four points (Probably not ideal and might not work)
         Z = mag
 	
         for i in range(0,4):
             x=corners[i][0]
             y=corners[i][1]
-	    #Generate L/interaction matrix which is a 8x6 matrix for 4 pts:
+	    #Generate L/interaction matrix which is a 8x6 matrix for 4 pts. In this implementation
             L[i*2:i*2+2,:]=np.matrix([[-1/Z,0,x/Z,x*y,-(1+x*x),y],[0,-1/Z,y/Z,1+y*y,-x*y,-x]])
 	#The image feature error calculated in pixels is determined from the found corners and the desired corner positions
         error = target_feature - target_positions
+	#The moore-penrose pseudoinverse of matrix is used to determine the velocity screw of the camera
         vel=-lam*np.dot(np.linalg.pinv(L),error)
         
         print(vel)
