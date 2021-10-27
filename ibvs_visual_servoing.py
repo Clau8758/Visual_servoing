@@ -22,7 +22,7 @@ mtx = load["mtx"]
 dist = load["dist"]
 
 #Set the type of aruco marker the algorithm should search for by changing aruco."DICT_5X5_100"
-arucoDict = cv2.aruco.Dictionary_get(aruco.DICT_5X5_100)
+arucoDict = cv2.aruco.Dictionary_get(aruco.DICT_5X5_50)
 arucoParams = cv2.aruco.DetectorParameters_create()
 # initialize the video stream from the camera 2 sec sleep is added to varm up sensor
 print("[INFO] starting video stream...")
@@ -32,7 +32,7 @@ time.sleep(2.0)
 
 #Define the target positions in image coordinates. The target positions are the desired locations of each of the aruco markers corner points. 
 #top-left, top-right, bottom-right, and bottom-left order
-target_positions = np.array([(int((1280/2)-100),int((720/2)-100)),(int((1280/2)+100),int((720/2)-100)),(int((1280/2)+100),int((720/2)+100)),(int((1280/2)-100),int((720/2)+100))])
+target_positions = np.array([(int((1280/2)-100),int((720/2)-100)),(int((1280/2)+100),int((720/2)-100)),(int((1280/2)+100),int((720/2)+100)),(int((1280/2)-100),int((720/2)+100))]).flatten()
 
 
 while True:
@@ -48,17 +48,38 @@ while True:
     
     #Calculate the distance to marker center by outputting tvec. Which is used to approximate Z or depth in the interaction matrix (Depth is magnitude of tvec)
     #Using a 10 cm marker the output corresponds to depth in cm. Using markersize 5 means the output needs to be halfed to be correct in cm 
-    markerSizeInCM = 10
-    rvec , tvec, _ = aruco.estimatePoseSingleMarkers(corners, markerSizeInCM, mtx, dist)
-    #If no marker is found the magnitude of tvec should be calculated
+    markerSizeInCM = 5
+    rvec , tvec, _  = aruco.estimatePoseSingleMarkers(corners, markerSizeInCM, mtx, dist)
+    #If no marker is found the depth of each corner should not be calculated
     if tvec is not None:
-        mag = np.linalg.norm(tvec)
-    
+        #To estimate the 3D parameters of each corner the pose of the aruco marker is used
+        MarkerHalf = markerSizeInCM / 2.0
+        
+        #Using the marker center as origin the corners all lie in the same xy-plane
+        #converts rotation vector rvec to rotation matrix mrv
+        mrv, jacobian = cv2.Rodrigues(rvec)
+        
+        #in markerworld the corners are all in the xy-plane so z is zero at first
+        X = MarkerHalf * mrv[:,0] #rotate the x = mhalf
+        Y = MarkerHalf * mrv[:,1] #rotate the y = mhalf
+        minusX = X * (-1)
+        minusY = Y * (-1)
+        
+        markercorners=np.array([(np.add(minusX, Y)),(np.add(X, Y)),(np.add( X, minusY)),(np.add(minusX, minusY))]) #order upper left,upper right,lower right,lower left in markerworld
+        
+        Z = np.empty([4],dtype=np.float16)
+        for i, mc in enumerate(markercorners):
+            markercorners[i] = np.add(tvec,mc) #add tvec to each corner
+            Z[i] = ((np.linalg.norm(markercorners[i]))/2)*1/100 #The magnitude of each markercorner vector is the depth Z for each corner
+        #print('Vec X, Y, C, dot(X,Y)', X,Y,C, np.dot(X,Y)) # just for debug
+        #markercorners = np.array(markercorners,dtype=np.float32) # type needed when used as input to cv2    
+        #mag = np.linalg.norm(tvec)
+        
     #The following lines draws the desired position of the 4 corner points on the frame in BLUE
-    #cv2.circle(frame, (target_positions[0][0],target_positions[0][1]), 4, (255, 0, 0), -1)
-    #cv2.circle(frame, (target_positions[1][0],target_positions[1][1]), 4, (255, 0, 0), -1)
-    #cv2.circle(frame, (target_positions[2][0],target_positions[2][1]), 4, (255, 0, 0), -1)
-    #cv2.circle(frame, (target_positions[3][0],target_positions[3][1]), 4, (255, 0, 0), -1)    
+    cv2.circle(frame, (target_positions[0],target_positions[1]), 4, (255, 0, 0), -1)
+    cv2.circle(frame, (target_positions[2],target_positions[3]), 4, (255, 0, 0), -1)
+    cv2.circle(frame, (target_positions[4],target_positions[5]), 4, (255, 0, 0), -1)
+    cv2.circle(frame, (target_positions[6],target_positions[7]), 4, (255, 0, 0), -1)    
 
     #Verify that an ArUco marker was detected or else 
     if len(corners) > 0:
@@ -102,28 +123,25 @@ while True:
         L=np.matlib.zeros((2*4,6))  
         # Gain on controller, essentially sets arm speed, although too high of a value will cause the
         # function to diverge.
-	lam = 0.5
+        lam = 0.5
 	
-	#Target feature are the detected corners
+	#Target features are the detected corners and their xy-positions
         target_feature = corners.flatten()
-        target_feature = target_feature[:,None]
-        
-        target_positions = target_positions.flatten()
-        target_positions = target_positions[:,None]
+        #target_feature = target_feature[:,None]
         
 	#Same depth are used for all four points (Probably not ideal and might not work)
-        Z = mag
+        
 	
         for i in range(0,4):
             x=corners[i][0]
             y=corners[i][1]
 	    #Generate L/interaction matrix which is a 8x6 matrix for 4 pts. In this implementation
-            L[i*2:i*2+2,:]=np.matrix([[-1/Z,0,x/Z,x*y,-(1+x*x),y],[0,-1/Z,y/Z,1+y*y,-x*y,-x]])
-	#The image feature error calculated in pixels is determined from the found corners and the desired corner positions
+            L[i*2:i*2+2,:]=np.matrix([[-1/Z[i],0,x/Z[i],x*y,-(1+x*x),y],[0,-1/Z[i],y/Z[i],1+y*y,-x*y,-x]])
+	    #The image feature error calculated in pixels is determined from the found corners and the desired corner positions
         error = target_feature - target_positions
-	#The moore-penrose pseudoinverse of matrix is used to determine the velocity screw of the camera
+	   #The moore-penrose pseudoinverse of matrix is used to determine the velocity screw of the camera
         vel=-lam*np.dot(np.linalg.pinv(L),error)
-        
+        debug=np.linalg.pinv(L)
         print(vel)
     
 # do a bit of cleanup
