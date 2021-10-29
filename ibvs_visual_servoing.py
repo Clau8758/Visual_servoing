@@ -1,10 +1,6 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Oct 11 09:55:08 2021
-
-@author: Claus
-"""
-
+#!/usr/bin/env python3
+import rospy
+from geometry_msgs.msg import Twist
 from imutils.video import VideoStream
 import imutils
 import time
@@ -13,11 +9,19 @@ from cv2 import aruco
 import numpy as np
 import os
 import numpy.matlib
+import PySpin
+import EasyPySpin
+
+#Creating rosnode with name "desired velocity"
+rospy.init_node('desired_velocity', anonymous=True)
+#Creates a ros publisher that publishes the camera velocities to the to topic velocity_controller/cmd_vel
+velocity_publisher = rospy.Publisher('/twist_controller/command', Twist, queue_size=10)
+vel_msg = Twist()
 
 
 #Load the camera calibration parameters from the file "mtx_dist.npz". The file is generated using the calibrate_camera.py script.
-path = '/Users/Claus/python_scripts/'
-load = np.load(os.path.join(os.path.dirname(path), "mtx_dist.npz"))
+#os.path.join(os.path.dirname(path)
+load = np.load("mtx_dist.npz")
 mtx = load["mtx"]
 dist = load["dist"]
 
@@ -26,8 +30,8 @@ arucoDict = cv2.aruco.Dictionary_get(aruco.DICT_5X5_50)
 arucoParams = cv2.aruco.DetectorParameters_create()
 # initialize the video stream from the camera 2 sec sleep is added to varm up sensor
 print("[INFO] starting video stream...")
-vs = VideoStream(src=0).start()
-time.sleep(2.0)
+cap = EasyPySpin.VideoCapture(0)
+time.sleep(1.0)
 
 
 #Define the target positions in image coordinates. The target positions are the desired locations of each of the aruco markers corner points. 
@@ -37,8 +41,9 @@ target_positions = np.array([(int((1280/2)-100),int((720/2)-100)),(int((1280/2)+
 
 while True:
     #Grabs the frame from the threaded video stream and resizes it to have a maximum width of 1000 pixels
-    frame = vs.read()
-    frame = imutils.resize(frame, width=1000)
+    frame = cap.read()
+    frame = np.array(frame[1])
+    frame = imutils.resize(frame,width=1280)
     #frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     
     #Detects ArUco markers in the input frame and outputs corner pixel coordinates
@@ -123,7 +128,7 @@ while True:
         L=np.matlib.zeros((2*4,6))  
         # Gain on controller, essentially sets arm speed, although too high of a value will cause the
         # function to diverge.
-        lam = 0.5
+        lam = 0.0001
 	
 	#Target features are the detected corners and their xy-positions
         target_feature = corners.flatten()
@@ -141,9 +146,14 @@ while True:
         error = target_feature - target_positions
 	   #The moore-penrose pseudoinverse of matrix is used to determine the velocity screw of the camera
         vel=-lam*np.dot(np.linalg.pinv(L),error)
-        debug=np.linalg.pinv(L)
-        print(vel)
-    
+        #debug=np.linalg.pinv(L)
+        vel_msg.linear.y = vel[0,0] 
+        vel_msg.linear.z = vel[0,1]
+        vel_msg.linear.z = vel[0,2]
+        vel_msg.angular.x = vel[0,3]
+        vel_msg.angular.y = vel[0,4]
+        vel_msg.angular.z = vel[0,5]
+        velocity_publisher.publish(vel_msg)
 # do a bit of cleanup
 cv2.destroyAllWindows()
 vs.stop()
