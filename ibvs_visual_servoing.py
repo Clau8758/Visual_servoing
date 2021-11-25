@@ -16,7 +16,7 @@ import numpy.matlib
 
 
 #Load the camera calibration parameters from the file "mtx_dist.npz". The file is generated using the calibrate_camera.py script.
-path = '/Users/Claus/python_scripts/'
+path = '/home/johan/GitHub/Visual_servoing/'
 load = np.load(os.path.join(os.path.dirname(path), "mtx_dist.npz"))
 mtx = load["mtx"]
 dist = load["dist"]

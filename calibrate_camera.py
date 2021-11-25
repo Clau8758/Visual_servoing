@@ -21,7 +21,8 @@ objp[:,:2] = np.mgrid[0:9,0:6].T.reshape(-1,2)
 objpoints = [] # 3d point in real world space
 imgpoints = [] # 2d points in image plane.
 
-images = glob.glob(r'calibration_images/*.png')
+#/home/johan/GitHub/Visual_servoing
+images = glob.glob(r'/home/johan/GitHub/Visual_servoing/calibration_images/*.png')
 
 path = 'results'
 pathlib.Path(path).mkdir(parents=True, exist_ok=True) 
