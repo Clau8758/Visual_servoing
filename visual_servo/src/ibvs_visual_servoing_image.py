@@ -132,7 +132,12 @@ while True:
         L=np.matlib.zeros((2*4,6))  
         # Gain on controller, essentially sets arm speed, although too high of a value will cause the
         # function to diverge.
-        lam = 0.001
+        lam = np.array([[0.003,0,0,0,0,0],
+        		 [0,0.003,0,0,0,0],
+        		 [0,0,0.003,0,0,0],
+        		 [0,0,0,0.03,0,0],
+        		 [0,0,0,0,0.03,0],
+        		 [0,0,0,0,0,0.03]])
 	
 	#Target features are the detected corners and their xy-positions
         target_feature = corners.flatten()
@@ -150,14 +155,14 @@ while True:
         error = target_feature - target_positions
         print(error)
 	   #The moore-penrose pseudoinverse of matrix is used to determine the velocity screw of the camera
-        vel=-lam*np.dot(np.linalg.pinv(L),error)
+        vel=np.dot(-lam,np.transpose(np.dot(np.linalg.pinv(L),error)))
         #debug=np.linalg.pinv(L)
-        vel_msg.linear.x = vel[0,0] 
-        vel_msg.linear.y = vel[0,1] 
-        vel_msg.linear.z = vel[0,2]  
-        vel_msg.angular.x = vel[0,3]
-        vel_msg.angular.y = vel[0,4]
-        vel_msg.angular.z = vel[0,5]
+        vel_msg.linear.x = vel[0] 
+        vel_msg.linear.y = vel[1] 
+        vel_msg.linear.z = vel[2]  
+        vel_msg.angular.x = vel[3]
+        vel_msg.angular.y = vel[4]
+        vel_msg.angular.z = vel[5]
         velocity_publisher.publish(vel_msg)
 # do a bit of cleanup
 cv2.destroyAllWindows()
