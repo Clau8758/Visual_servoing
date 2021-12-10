@@ -29,14 +29,23 @@ pathlib.Path(path).mkdir(parents=True, exist_ok=True)
 found = 0
 mean_error = 0
 
-for fname in images:  # Here, 10 can be changed to whatever number you like to choose
-    img = cv2.imread(fname) # Capture frame-by-frame
+cap = cv2.VideoCapture(0)
+# Check if the webcam is opened correctly
+if not cap.isOpened():
+    raise IOError("Cannot open webcam")
+
+while True and found < 20:  # Here, 10 can be changed to whatever number you like to choose
+    #img = cv2.imread(fname) # Capture frame-by-frame
     #print(images[im_i])
+    print(found)
+    _, img = cap.read()
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     # Find the chess board corners
     ret, corners = cv2.findChessboardCorners(gray, (9,6), None)
     # If found, add object points, image points (after refining them)
     if ret == True:
+        print("BB")
+        #input()
         objpoints.append(objp)   # Certainly, every loop objp is the same, in 3D.
         corners2 = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
         imgpoints.append(corners2)
@@ -47,8 +56,8 @@ for fname in images:  # Here, 10 can be changed to whatever number you like to c
         cv2.waitKey(10)
         # if you want to save images with detected corners 
         # uncomment following 2 lines and lines 5, 18 and 19
-        image_name = path + '/result' + str(found) + '.png'
-        cv2.imwrite(image_name, img)
+        #image_name = path + '/result' + str(found) + '.png'
+        #cv2.imwrite(image_name, img)
 
 print("Number of images used for calibration: ", found)
 
